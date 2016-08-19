@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en"><Esri><CreaDate>20160819</CreaDate><CreaTime>14381600</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files\arcgis\desktop10.4\ArcToolbox\Toolboxes\Spatial Analyst Tools.tbx\RasterCalculator" Date="20160819" Time="143816">RasterCalculator "bight32.tif"*Sin("swordfish32.tif") C:\seasketch\ecocast\8_18_16\bight32.tif</Process></lineage></DataProperties></Esri></metadata>

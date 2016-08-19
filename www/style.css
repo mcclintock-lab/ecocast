@@ -1,0 +1,10 @@
+.shiny-progress-container{
+  top: 55% !important;
+  left: 50% !important;
+  margin-top: -100px !important;
+  margin-left: -250px !important;
+  width:30%;
+}
+.img_banner{
+  padding-left:245px;
+}
