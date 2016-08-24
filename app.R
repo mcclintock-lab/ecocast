@@ -15,7 +15,11 @@ library(dplyr)
 library(RCurl)
 library(urltools)
 library(data.table)
-
+library(jsonlite)
+library(rgdal)
+library(geojsonio)
+library(maptools)
+library(proj4)
 #built in values for now...
 DATE_ONE_STR = "August 11, 2016"
 DATE_TWO_STR = "August 18, 2016"
@@ -24,35 +28,69 @@ DATE_TWO = "8_18_16"
 dateVals<-c(DATE_ONE, DATE_TWO)
 dateDisplayVals<-c(DATE_ONE_STR, DATE_TWO_STR)
 names(dateVals) <- dateDisplayVals
-
 # Define UI for application that draws a histogram
 ui <- shinyUI(fluidPage(theme = "style.css",
+                        
    # Application title
    div(class="img_banner", 
        img(src="banner.png",height=95)
    ),
-   leafletOutput("mymap", width=1000, height=700),
-   absolutePanel(top = 105, left = 60, height=80, width=300, fixed=TRUE,
-                style = "opacity:0.70;border-radius: 3px; padding: 8px; opacity: 0.92;border: 1px solid; background: white;",
-                selectInput("timeSelect", "Date To Show", dateDisplayVals),
-                tags$head(tags$style(".tab-content {overflow: visible;}"))
-                
-   ), 
-  absolutePanel(top = 105, right = 30, height=350, width=300, fixed=TRUE,
-                 style = "opacity:0.70;border-radius: 3px; padding: 8px; opacity: 0.92;border: 1px solid; background: white;",
-                 h5("West Coast Model"),
-                 checkboxInput("swordFish", "Show Swordfish",value=TRUE),
-                 sliderInput("swordFishSlider", "Swordfish Predictive Surface", 0,100,c(50,70),step=1),
-                 checkboxInput("turtle", "Show Sea Turtles", value=TRUE),
-                 sliderInput("turtleSlider", "Turtle Predictive Surface", 0,100,c(20,30),step=1),
-                 checkboxInput("average", "Average Selected Rasters", value=TRUE)
-   ),
-   absolutePanel(top = 460, right = 30, height=200, width=300, fixed=TRUE,
-                 style = "opacity:0.70;border-radius: 3px; padding: 8px; opacity: 0.92;border: 1px solid; background: white;",
-                 h5("High Resolution California Bight Model"),
-                 checkboxInput("bight", "Show Snipe Bight Data",value=TRUE),
-                 sliderInput("bightSlider", "Snipe Predictive Surface", 0,100,c(30,40),step=1)
+   fluidRow(
+     column(8,  
+            leafletOutput("mymap", width=1000,height=750),
+            absolutePanel(top = 105, left = 60, height=120, width=300, fixed=TRUE,
+                          style = "opacity:0.70;border-radius: 3px; padding: 8px; opacity: 0.92;border: 1px solid; background: white;",
+                          selectInput("timeSelect", "Date To Show", dateDisplayVals),
+                          tags$head(tags$style(".tab-content {overflow: visible;}")),
+                          actionButton("zoomToWestCoast", "Zoom to West Coast", style="display:inline;font-size:0.8em;"),
+                          actionButton("zoomToBight", "Zoom to California Bight", style="display:inline-block;font-size:0.8em;")
+            )
+          ),
+     column(4, style="padding-right:20px;",
+            inputPanel(style = "overflow-y:scroll;width:280px;overflow-x:hidden; max-height: 400px;opacity:0.70;border-radius: 3px; padding-left: 8px; opacity: 0.92;border: 1px solid; background: white;",
+                          h6("West Coast Model"),
+                          
+                          checkboxInput(inputId="swordFish", "Show Swordfish",value=TRUE),
+                          conditionalPanel(
+                            condition='input.swordFish',
+                            class="sliderPanel",
+                            sliderInput("swordFishSlider", "Swordfish Predictive Surface", 0,100,c(50,70),step=1)
+                          ),                          
+                          
+                       
+                          checkboxInput("turtle", "Show Sea Turtles", value=FALSE),
+                          conditionalPanel(
+                            condition='input.turtle',
+                            class="sliderPanel",
+                            sliderInput("turtleSlider", "Turtle Predictive Surface", 0,100,c(20,30),step=1)
+                          ),
+                          
+                          
+                          checkboxInput("lbst", "Show LBST", value=FALSE),
+                          conditionalPanel(
+                            condition='input.lbst',
+                            class="sliderPanel",
+                            sliderInput("lbstSlider", "LBST Predictive Surface", 0,100,c(30,40),step=1)
+                          ),
+                          
+                          checkboxInput("blsh", "Show BLSH", value=FALSE),
+                          conditionalPanel(
+                            condition='input.blsh',
+                            class="sliderPanel",
+                            sliderInput("blshSlider", "Blsh Predictive Surface", 0,100,c(40,50),step=1)
+                          ),
+                          
+                          checkboxInput("average",  "Average All Selected Rasters", value=TRUE)
+                          
+            ),
+            inputPanel(style = "opacity:0.70;border-radius: 3px; padding: 8px; opacity: 0.92;border: 1px solid; background: white;",
+                          h5("High Resolution California Bight Model"),
+                          checkboxInput("bight", "Show Snipe Bight Data",value=TRUE),
+                          sliderInput("bightSlider", "Snipe Predictive Surface", 0,100,c(30,40),step=1)
+            )    
+    )
    )
+
 ))
 
 buildCache <- function(){
@@ -107,11 +145,38 @@ addFilteredRasters <- function(rstack, ranges, targetRaster){
 #addRasterImage(inrast, colors=pal, opacity = 0.9, maxBytes = 123123123) %>% 
 #%>% fitBounds(~min(long), ~min(lat), ~max(long), ~max(lat))
 # Define server logic required to draw a histogram
+wc_ext<-list()
+wc_ext$lon<-(-119.417931)
+wc_ext$lat<-36.778259
+wc_ext$zoom<-5
+bight_ext<-list()
+bight_ext$lon<-(-119.2)
+bight_ext$lat<-34.35
+bight_ext$zoom<-8
 server <- shinyServer(function(input, output) {
-  lon = -119.417931
-  lat = 36.778259
-
+  
+  v <- reactiveValues(data = NULL)
+  
+  observeEvent(input$zoomToWestCoast, {
+    #need this null to force a data change and a re-render
+    v$data<-NULL
+    v$data <- wc_ext
+  })
+  
+  observeEvent(input$zoomToBight, {
+    #need this null to force a data change and a re-render
+    v$data<-NULL
+    v$data <- bight_ext
+  }) 
+  
   output$mymap <- renderLeaflet({
+    target_ext <- v$data
+    if(is.null(target_ext)){
+      target_ext<-wc_ext
+    }
+    print("target----")
+    print(target_ext)
+    
     showSwordFish = input$swordFish
     showTurtles = input$turtle
     showBight = input$bight
@@ -124,15 +189,13 @@ server <- shinyServer(function(input, output) {
       step <-1
       incProgress(1/incrs, detail = paste("reading..."))
       swordFishRaster <- getBycatchRaster(imageCache, 1, selDate)
-      print("?????")
-      print(swordFishRaster)
+
       if(showTurtles){
         turtleRaster <- getBycatchRaster(imageCache, 2, selDate)  
       }
       if(FALSE){
         bightRaster <- getBycatchRaster(imageCache, 3, selDate)
         
-        print(bightRaster)
       }
       rstack <- c()
       highResStack <- c()
@@ -198,21 +261,27 @@ server <- shinyServer(function(input, output) {
       palette <- colorNumeric(pal, values(swordFishRaster),
                               na.color = "transparent")    
       vals = values(swordFishRaster)
-      
-      print("drawing leaflet??")
+
+
       if(!is.null(targetRast)){
         lmap <- leaflet() %>%
           addProviderTiles("CartoDB.Positron",
                            options = providerTileOptions(noWrap = TRUE)
-          )  %>% setView(lon, lat, zoom=5) %>% 
+          )  %>% setView(target_ext$lon, target_ext$lat, zoom=target_ext$zoom)  %>%
           addLegend("bottomleft", pal = palette, values = vals, title = "Values") %>%
-          addRasterImage(targetRast, colors=palette, group="swordfish", opacity = 0.8, maxBytes = 123123123, project=FALSE)
+          addRasterImage(targetRast, colors=palette, group="swordfish", opacity = 0.8, maxBytes = 123123123, project=FALSE)%>% 
+          addWMSTiles(
+            "http://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi",
+            layers = "nexrad-n0r-900913",
+            options = WMSTileOptions(format = "image/png", transparent = TRUE),
+            attribution = "Weather data © 2012 IEM Nexrad"
+          )
         lmap
       } else {
         lmap <- leaflet() %>%
           addProviderTiles("CartoDB.Positron",
                            options = providerTileOptions(noWrap = TRUE)
-          )  %>% setView(lon, lat, zoom=5)
+          )  %>% setView(target_ext$lon, target_ext$lat, zoom=target_ext$zoom)
         lmap
       }
     })
