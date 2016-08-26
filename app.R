@@ -20,97 +20,123 @@ library(rgdal)
 library(geojsonio)
 library(maptools)
 library(proj4)
-#built in values for now...
-DATE_ONE_STR = "August 11, 2016"
-DATE_TWO_STR = "August 18, 2016"
-DATE_ONE = "8_11_16"
-DATE_TWO = "8_18_16"
-dateVals<-c(DATE_ONE, DATE_TWO)
-dateDisplayVals<-c(DATE_ONE_STR, DATE_TWO_STR)
-names(dateVals) <- dateDisplayVals
+
+source('data_utils.R')
+displayDates<-getDisplayDates()
 # Define UI for application that draws a histogram
 ui <- shinyUI(fluidPage(theme = "style.css",
-                        
+   tags$style(type = "text/css", "html, body {width:1000px;height:750px;}"),           
    # Application title
-   div(class="img_banner", 
-       img(src="banner.png",height=95)
-   ),
+   
    fluidRow(
-     column(8,  
-            leafletOutput("mymap", width=1000,height=750),
+     column(12, id="banner",
+        div(class="img_banner", 
+            img(src="banner.png",height=95)
+        )
+     ),
+     column(8,id="main",
+            leafletOutput("mymap", width=970,height=700),
             absolutePanel(top = 105, left = 60, height=120, width=300, fixed=TRUE,
                           style = "opacity:0.70;border-radius: 3px; padding: 8px; opacity: 0.92;border: 1px solid; background: white;",
-                          selectInput("timeSelect", "Date To Show", dateDisplayVals),
+                          selectInput("timeSelect", "Date To Show", displayDates),
                           tags$head(tags$style(".tab-content {overflow: visible;}")),
                           actionButton("zoomToWestCoast", "Zoom to West Coast", style="display:inline;font-size:0.8em;"),
                           actionButton("zoomToBight", "Zoom to California Bight", style="display:inline-block;font-size:0.8em;")
             )
           ),
-     column(4, style="padding-right:20px;",
-            inputPanel(style = "overflow-y:scroll;width:280px;overflow-x:hidden; max-height: 400px;opacity:0.70;border-radius: 3px; padding-left: 8px; opacity: 0.92;border: 1px solid; background: white;",
+     column(4, id="rightPanel",
+            inputPanel(class="largePanel",
                           h6("West Coast Model"),
                           
-                          checkboxInput(inputId="swordFish", "Show Swordfish",value=TRUE),
+                          checkboxInput(inputId="swpa2", "Show Swordfish",value=TRUE),
                           conditionalPanel(
-                            condition='input.swordFish',
+                            condition='input.swpa2',
                             class="sliderPanel",
-                            sliderInput("swordFishSlider", "Swordfish Predictive Surface", 0,100,c(50,70),step=1)
+                            sliderInput("swpa2Slider", "Swordfish Predictive Surface", 0,100,c(0,100),step=1)
                           ),                          
-                          
-                       
-                          checkboxInput("turtle", "Show Sea Turtles", value=FALSE),
+                
+                          checkboxInput("LBST_BRT", "Show Leatherback Sea Turtles", value=FALSE),
                           conditionalPanel(
-                            condition='input.turtle',
+                            condition='input.LBST_BRT',
                             class="sliderPanel",
-                            sliderInput("turtleSlider", "Turtle Predictive Surface", 0,100,c(20,30),step=1)
+                            sliderInput("LBST_BRTSlider", "Turtle Predictive Surface", 0,100,c(0,100),step=1)
                           ),
                           
                           
-                          checkboxInput("lbst", "Show LBST", value=FALSE),
+                          checkboxInput("blpa2", "Show Blue Shark Bycatch Weighting", value=FALSE),
                           conditionalPanel(
-                            condition='input.lbst',
+                            condition='input.blpa2',
                             class="sliderPanel",
-                            sliderInput("lbstSlider", "LBST Predictive Surface", 0,100,c(30,40),step=1)
+                            sliderInput("blpa2Slider", "Blue Shark Predictive Surface", 0,100,c(0,100),step=1)
                           ),
-                          
-                          checkboxInput("blsh", "Show BLSH", value=FALSE),
-                          conditionalPanel(
-                            condition='input.blsh',
-                            class="sliderPanel",
-                            sliderInput("blshSlider", "Blsh Predictive Surface", 0,100,c(40,50),step=1)
-                          ),
-                          
-                          checkboxInput("average",  "Average All Selected Rasters", value=TRUE)
-                          
+                         checkboxInput("blTpa1", "Show Blue Shark Tracking Weighting", value=FALSE),
+                         conditionalPanel(
+                           condition='input.blTpa1',
+                           class="sliderPanel",
+                           sliderInput("blTpa1Slider", "Blue Shark Tracking Predictive Surface", 0,100,c(0,100),step=1)
+                         ),                          
+                         checkboxInput("casl", "Show California Sea Lion", value=FALSE),
+                         conditionalPanel(
+                            condition='input.casl',
+                             class="sliderPanel",
+                            sliderInput("caslSlider", "Sea Lion Predictive Surface", 0,100,c(0,100),step=1)
+                         ),
+                          h5("Combine the selected model outputs:", style="width:260px;margin-top:-5px;margin-bottom:2px;"),
+                          span(style="display:block;padding-left:20px;width:260px;",
+                               checkboxInput("average",  "Average", value=FALSE)
+                          )
+         
             ),
-            inputPanel(style = "opacity:0.70;border-radius: 3px; padding: 8px; opacity: 0.92;border: 1px solid; background: white;",
-                          h5("High Resolution California Bight Model"),
-                          checkboxInput("bight", "Show Snipe Bight Data",value=TRUE),
-                          sliderInput("bightSlider", "Snipe Predictive Surface", 0,100,c(30,40),step=1)
-            )    
+
+            inputPanel(class="smallPanel",
+                       h5("High Resolution California Bight Model"),
+                       checkboxInput("swpa_bight", "Show Swordfish Bight Data",value=FALSE),
+                       conditionalPanel(
+                         condition='input.swpa_bight',
+                         class="sliderPanel",
+                         sliderInput("swpa_bightSlider", "Swordfish Predictive Surface", 0,100,c(0,100),step=1)
+                       )
+            ),
+            inputPanel(class="smallPanel",
+                       h5("Base Layers"),
+                       checkboxInput("usEEZ", "Show US EEZ",value=TRUE),
+                       checkboxInput("usEEZ", "Show Leatherback Turtle Conservation Area",value=FALSE)
+            )
     )
    )
 
 ))
 
+
+
 buildCache <- function(){
 
-  
   rurls <- c("https://s3-us-west-2.amazonaws.com/mcclintocklab",
               "https://s3-us-west-2.amazonaws.com/mcclintocklab",
-              "https://s3-us-west-2.amazonaws.com/mcclintocklab")
-  rasts <- c("NO", "NO", "NO")
+              "https://s3-us-west-2.amazonaws.com/mcclintocklab",
+              "https://s3-us-west-2.amazonaws.com/mcclintocklab",
+              "https://s3-us-west-2.amazonaws.com/mcclintocklab"
+             )
+  rasts <- c("NO", "NO", "NO", "NO", "NO")
   local_filenames <- c("swordfish32.tif",
                         "turtles32.tif",
+                        "lbst32.tif",
+                        "blsh32.tif",
                         "bight32.tif")
-  rkeys <- c("swordfish", "turtles", "bight1")
+  rkeys <- c("swordfish", "turtles", "bight1","lbst32", "blsh32")
   
   imageCache <- data.table(urls=rurls, rasters=rasts, 
                            fnames=local_filenames, keys=rkeys)
   imageCache
 }
 
-imageCache<- buildCache()
+getNewBycatchRaster <- function(target_dir, selDate){
+  local_dir <- file.path(TIF_DIR, target_dir)
+  local_name<-paste(target_dir, "_",selDate,".tif",sep="")
+  local_name<-file.path(local_dir, local_name)
+  r<-raster(local_name)
+  r
+}
 
 getBycatchRaster <- function(imageCache, index, selDate){
 
@@ -142,12 +168,18 @@ addFilteredRasters <- function(rstack, ranges, targetRaster){
   }
   rstack
 }
-#addRasterImage(inrast, colors=pal, opacity = 0.9, maxBytes = 123123123) %>% 
-#%>% fitBounds(~min(long), ~min(lat), ~max(long), ~max(lat))
+addRaster <- function(showVal, targetRaster, rstack, ranges, incr, progress_str){
+  if(showVal){
+    incProgress(incr, detail = paste(progress_str))
+    rstack <- addFilteredRasters(rstack, ranges, targetRaster)
+  } 
+  rstack
+}
+
 # Define server logic required to draw a histogram
 wc_ext<-list()
 wc_ext$lon<-(-119.417931)
-wc_ext$lat<-36.778259
+wc_ext$lat<-40.078259
 wc_ext$zoom<-5
 bight_ext<-list()
 bight_ext$lon<-(-119.2)
@@ -174,44 +206,47 @@ server <- shinyServer(function(input, output) {
     if(is.null(target_ext)){
       target_ext<-wc_ext
     }
-    print("target----")
+    
     print(target_ext)
     
-    showSwordFish = input$swordFish
-    showTurtles = input$turtle
-    showBight = input$bight
+    showSwordFish = input$swpa2
+    showTurtles = input$LBST_BRT
+    showBlueSharkBycatch = input$blpa2
+    showBlueSharkTracking = input$blTpa1
+    showSeaLions = input$casl
+    
     average = input$average
-    selDate<- dateVals[input$timeSelect]
+    selDate<- input$timeSelect
 
     scaledLegendAndColorRange <- FALSE
     withProgress(message = 'Loading images: ', value = 0, {
-      incrs <- 5
+      incrs <- 7
       step <-1
+      rstack<-c()
       incProgress(1/incrs, detail = paste("reading..."))
-      swordFishRaster <- getBycatchRaster(imageCache, 1, selDate)
-
+      swordFishRaster <- getNewBycatchRaster(SWORDFISH, selDate)
+      if(showSwordFish){
+        rstack <- addRaster(showSwordFish, swordFishRaster, rstack, c(input$swpa2Slider), 2/incrs, "Filtering swordfish data...")
+      }
       if(showTurtles){
-        turtleRaster <- getBycatchRaster(imageCache, 2, selDate)  
+        turtleRaster <- getNewBycatchRaster(LEATHERBACK, selDate)  
+        rstack <- addRaster(showTurtles, turtleRaster, rstack, c(input$LBST_BRTSlider), 3/incrs, "Filtering Turtle data...")
+      }
+      if(showBlueSharkTracking){
+        blueSharkTrackingRaster <- getNewBycatchRaster(BLUE_SHARK_TRACKING, selDate) 
+        rstack <- addRaster(showBlueSharkTracking, blueSharkTrackingRaster, rstack, c(input$blTpa1Slider), 4/incrs, "Filtering Blue Shark Tracking data...")
+      }
+      if(showBlueSharkBycatch){
+        blueSharkBycatchRaster <- getNewBycatchRaster(BLUE_SHARK_BYCATCH, selDate) 
+        rstack <- addRaster(showBlueSharkBycatch, blueSharkBycatchRaster, rstack, c(input$blpa2Slider), 5/incrs, "Filtering Blue Shark Bycatch data...")
+      }
+      if(showSeaLions){
+        seaLionRaster <- getNewBycatchRaster(SEA_LION, selDate)
+        rstack <- addRaster(showSeaLions, seaLionRaster, rstack, c(input$caslSlider), 6/incrs, "Filtering Sea Lion data...")
       }
       if(FALSE){
-        bightRaster <- getBycatchRaster(imageCache, 3, selDate)
-        
+        bightRaster <- getBycatchRaster(imageCache, 5, selDate)
       }
-      rstack <- c()
-      highResStack <- c()
-
-      if(showSwordFish){
-        incProgress(2/incrs, detail = paste("filtering swordfish data..."))
-        ranges <- c(input$swordFishSlider)
-        rstack <- addFilteredRasters(rstack, ranges, swordFishRaster)
-      } 
-      
-      if(showTurtles){
-        incProgress(3/incrs, detail = paste("filtering turtle data..."))
-        ranges <- c(input$turtleSlider)
-        rstack <- addFilteredRasters(rstack, ranges, turtleRaster)
-      } 
-      
       if(FALSE){
         incProgress(4/incrs, detail = paste("filtering bight data..."))
         ranges <- c(input$bightSlider)
@@ -235,23 +270,25 @@ server <- shinyServer(function(input, output) {
           }
       } else if(length(rstack) == 1){
         targetRast <- rstack[[1]]
+      } 
+      
+      if(average && length(rstack) > 0){
+        incProgress(7/incrs, detail = paste("Calculating weighted average..."))
+        targetRast <- calc(raster_stack, fun=mean, na.rm=TRUE)
       } else {
-        if(average && length(rstack) > 0){
-          targetRast <- calc(raster_stack, fun=mean, na.rm=TRUE)
+        if(length(rstack) == 0){
+          targetRast <- NULL
         } else {
-          if(length(rstack) == 0){
-            targetRast <- NULL
-          } else {
-            targetRast <- rstack[[1]]  
-          }
+          targetRast <- rstack[[1]]  
         }
       }
+      
       if(FALSE){
         print("merging in high res stack")
         agg_rast = aggregate(highResStack[[1]], fact=25)
         targetRast <- merge(targetRast, agg_rast)
       }
-      incProgress(5/incrs, detail = paste("drawing..."))
+      
       
       #Spectral
       pal <- rev(brewer.pal(10,"Spectral"))
@@ -261,7 +298,6 @@ server <- shinyServer(function(input, output) {
       palette <- colorNumeric(pal, values(swordFishRaster),
                               na.color = "transparent")    
       vals = values(swordFishRaster)
-
 
       if(!is.null(targetRast)){
         lmap <- leaflet() %>%
