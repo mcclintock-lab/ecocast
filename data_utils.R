@@ -4,6 +4,7 @@ SWORDFISH <- 'swpa2'
 BLUE_SHARK_BYCATCH <- 'blpa2'
 BLUE_SHARK_TRACKING <- 'blTpa1'
 LEATHERBACK <- 'LBST_BRT'
+SWORDFISH_HIRES <- 'SWOR_HiRes'
 getDataDirs <- function(){
 
   dirs <- c(file.path(TIF_DIR, SEA_LION), file.path(TIF_DIR, SEA_LION), 

@@ -59,7 +59,7 @@ ui <- shinyUI(fluidPage(theme = "style.css",
                           conditionalPanel(
                             condition='input.LBST_BRT',
                             class="sliderPanel",
-                            sliderInput("LBST_BRTSlider", "Turtle Predictive Surface", 0,100,c(0,100),step=1)
+                            sliderInput("LBST_BRTSlider", "Turtle Predictive Surface", 0,100,c(00,100),step=1)
                           ),
                           
                           
@@ -83,18 +83,18 @@ ui <- shinyUI(fluidPage(theme = "style.css",
                          ),
                           h5("Combine the selected model outputs:", style="width:260px;margin-top:-5px;margin-bottom:2px;"),
                           span(style="display:block;padding-left:20px;width:260px;",
-                               checkboxInput("average",  "Average", value=FALSE)
+                               checkboxInput("average",  "Average", value=TRUE)
                           )
          
             ),
 
             inputPanel(class="smallPanel",
                        h5("High Resolution California Bight Model"),
-                       checkboxInput("swpa_bight", "Show Swordfish Bight Data",value=FALSE),
+                       checkboxInput("SWOR_HiRes", "Show Swordfish Bight Data",value=TRUE),
                        conditionalPanel(
-                         condition='input.swpa_bight',
+                         condition='input.SWOR_HiRes',
                          class="sliderPanel",
-                         sliderInput("swpa_bightSlider", "Swordfish Predictive Surface", 0,100,c(0,100),step=1)
+                         sliderInput("SWOR_HiResSlider", "Swordfish Predictive Surface", 0,100,c(20,100),step=1)
                        )
             ),
             inputPanel(class="smallPanel",
@@ -207,17 +207,15 @@ server <- shinyServer(function(input, output) {
       target_ext<-wc_ext
     }
     
-    print(target_ext)
-    
     showSwordFish = input$swpa2
     showTurtles = input$LBST_BRT
     showBlueSharkBycatch = input$blpa2
     showBlueSharkTracking = input$blTpa1
     showSeaLions = input$casl
-    
+    showSwordFishHiRes = input$SWOR_HiRes
     average = input$average
     selDate<- input$timeSelect
-
+    showSanctuaries = input$usEEZ
     scaledLegendAndColorRange <- FALSE
     withProgress(message = 'Loading images: ', value = 0, {
       incrs <- 7
@@ -225,6 +223,7 @@ server <- shinyServer(function(input, output) {
       rstack<-c()
       incProgress(1/incrs, detail = paste("reading..."))
       swordFishRaster <- getNewBycatchRaster(SWORDFISH, selDate)
+      print(swordFishRaster)
       if(showSwordFish){
         rstack <- addRaster(showSwordFish, swordFishRaster, rstack, c(input$swpa2Slider), 2/incrs, "Filtering swordfish data...")
       }
@@ -244,8 +243,9 @@ server <- shinyServer(function(input, output) {
         seaLionRaster <- getNewBycatchRaster(SEA_LION, selDate)
         rstack <- addRaster(showSeaLions, seaLionRaster, rstack, c(input$caslSlider), 6/incrs, "Filtering Sea Lion data...")
       }
-      if(FALSE){
-        bightRaster <- getBycatchRaster(imageCache, 5, selDate)
+      if(showSwordFishHiRes){
+        swordFishHiResRaster <- getNewBycatchRaster(SWORDFISH_HIRES, selDate)
+        #print(swordFishHiResRaster)
       }
       if(FALSE){
         incProgress(4/incrs, detail = paste("filtering bight data..."))
@@ -261,10 +261,12 @@ server <- shinyServer(function(input, output) {
               targetRast <- rstack[[i]]
               raster_stack <- stack(rstack[[i]])
             } else{
+              r<-rstack[[i]]
+              r[is.na(r[])] <- 0 
               if(average){
-                raster_stack <- addLayer(raster_stack, rstack[[i]])
+                raster_stack <- addLayer(raster_stack, r)
               } else {
-                targetRast <- merge(targetRast, rstack[[i]])
+                targetRast <- merge(targetRast, r)
               }
             }
           }
@@ -272,14 +274,15 @@ server <- shinyServer(function(input, output) {
         targetRast <- rstack[[1]]
       } 
       
-      if(average && length(rstack) > 0){
+      if(average && length(raster_stack) > 0){
         incProgress(7/incrs, detail = paste("Calculating weighted average..."))
-        targetRast <- calc(raster_stack, fun=mean, na.rm=TRUE)
+        targetRast <- overlay(raster_stack, fun=mean, na.rm=FALSE)
       } else {
         if(length(rstack) == 0){
           targetRast <- NULL
         } else {
-          targetRast <- rstack[[1]]  
+          #use the merged one
+          targetRast <- targetRast
         }
       }
       
@@ -294,32 +297,35 @@ server <- shinyServer(function(input, output) {
       pal <- rev(brewer.pal(10,"Spectral"))
       vals <- NULL
       
+      #targetRast<-swordFishHiResRaster
       #for now, palette is taken from swordfish and everything is assumed to be same range
-      palette <- colorNumeric(pal, values(swordFishRaster),
-                              na.color = "transparent")    
-      vals = values(swordFishRaster)
-
-      if(!is.null(targetRast)){
-        lmap <- leaflet() %>%
-          addProviderTiles("CartoDB.Positron",
-                           options = providerTileOptions(noWrap = TRUE)
-          )  %>% setView(target_ext$lon, target_ext$lat, zoom=target_ext$zoom)  %>%
-          addLegend("bottomleft", pal = palette, values = vals, title = "Values") %>%
-          addRasterImage(targetRast, colors=palette, group="swordfish", opacity = 0.8, maxBytes = 123123123, project=FALSE)%>% 
-          addWMSTiles(
-            "http://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi",
-            layers = "nexrad-n0r-900913",
-            options = WMSTileOptions(format = "image/png", transparent = TRUE),
-            attribution = "Weather data © 2012 IEM Nexrad"
-          )
-        lmap
+         
+      if(is.null(targetRast)){
+        vals = values(swordFishRaster)
       } else {
-        lmap <- leaflet() %>%
-          addProviderTiles("CartoDB.Positron",
-                           options = providerTileOptions(noWrap = TRUE)
-          )  %>% setView(target_ext$lon, target_ext$lat, zoom=target_ext$zoom)
-        lmap
+        vals = values(targetRast)
       }
+      
+      palette <- colorNumeric(pal, vals,
+                              na.color = "transparent") 
+      
+      #for some reason, piping %>% wasn't working quite right here, so doing them one at a time
+      lmap <- leaflet()
+      lmap <- addProviderTiles(lmap, "CartoDB.Positron",options = providerTileOptions(noWrap = TRUE))  
+      lmap <- setView(lmap, target_ext$lon, target_ext$lat, zoom=target_ext$zoom)
+      if(!is.null(targetRast)){
+        lmap <- addLegend(lmap, "bottomleft", pal = palette, values = vals, title = "Values") 
+        lmap <- addRasterImage(lmap, targetRast, colors=palette, group="swordfish", opacity = 0.8, maxBytes = 123123123, project=FALSE)
+        if(showSanctuaries){
+          lmap <- addWMSTiles(lmap, "http://gp1.seasketch.org/arcgis/services/ecocast/Sanctuaries/ImageServer/WMSServer?",
+                              layers="0",
+                              options = WMSTileOptions(format = "image/png", transparent = TRUE),
+                              attribution = "Sanctuaries"
+          )
+        }
+      }
+      lmap
+
     })
   })
   
